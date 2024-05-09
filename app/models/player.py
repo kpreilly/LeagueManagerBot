@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from database.db_setup import Base
+from app.database.db_setup import Base
 from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime
 
 

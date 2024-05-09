@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch, MagicMock, ANY
-from main import add_verified_users_to_db
-from models.player import Player
+from app.main import add_verified_users_to_db
+from app.models.player import Player
 import asyncio
 from datetime import datetime, timezone
 

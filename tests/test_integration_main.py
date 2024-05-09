@@ -4,8 +4,8 @@ from unittest.mock import patch, MagicMock
 from discord import Member, Role
 from sqlalchemy.exc import SQLAlchemyError
 
-from main import add_verified_users_to_db, get_all_verified_users
-from models.player import Player
+from app.main import add_verified_users_to_db, get_all_verified_users
+from app.models.player import Player
 
 class AsyncMock(MagicMock):
     async def __aiter__(self):

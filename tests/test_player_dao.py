@@ -1,8 +1,8 @@
 import unittest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from database.dao.player_dao import get_player, get_players, create_player, update_player, delete_player
-from models.player import Player
+from app.database.dao.player_dao import get_player, get_players, create_player, update_player, delete_player
+from app.models.player import Player
 from datetime import datetime, timedelta, timezone
 
 class TestPlayerDAO(unittest.TestCase):

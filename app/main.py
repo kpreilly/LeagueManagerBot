@@ -117,8 +117,8 @@ async def get_unverified_rank_check_usage(messages: List[Message], unverified_us
         # check if the user has used the /rank command OR if they've provided a URL starting with
         # https://rocketleague.tracker.network/rocket-league/profile/
         if (message.content.startswith('/rank') or
-            message.content.startswith('https://rocketleague.tracker.network/rocket-league/profile/')) and \
-                message.author in unverified_users:
+                message.content.startswith('https://rocketleague.tracker.network/rocket-league/profile/')
+            ) and message.author in unverified_users:
             result.append(message)
     return result
 

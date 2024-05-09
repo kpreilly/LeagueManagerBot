@@ -1,5 +1,5 @@
 import unittest
-from models.player import Player
+from app.models.player import Player
 from datetime import datetime, timedelta, timezone
 
 class TestPlayer(unittest.TestCase):
