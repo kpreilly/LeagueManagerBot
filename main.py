@@ -3,8 +3,12 @@ import os
 from dotenv import load_dotenv
 from discord import Intents, Client, Message, Member, Guild, utils, TextChannel, Object
 import asyncio
-import re
+from database.db_setup import get_db_session
+from models.player import Player
+from sqlalchemy.exc import SQLAlchemyError
+from database.dao import player_dao
 
+DATABASE_URL: Final[str] = os.getenv('DATABASE_URL', 'sqlite:///league.db')
 load_dotenv()
 TOKEN: Final[str] = os.getenv('DISCORD_TOKEN', 'default_token')
 GUILD_NAME: Final[str] = 'Alfa League'
@@ -27,74 +31,46 @@ async def on_ready() -> None:
         # create a menu to select the action
         print('Select an action:')
         print('1. Find unverified users with rank check')
-        print('2. Verified: Replace " I " with " | " in display names')
-        print('3. Add " | FA" to verified users who have verified role but no FA indicator in their nickname')
-        print('4. TEST FEATURE: Get users in voice channels')
+        print('2. TEST FEATURE: Add users with Verified role to the Players table')
         print('Ctrl+C to exit')
         response = input('Choice: ')
         print()
         if response == '1':
             await find_unverified_users_with_rank_check()
         elif response == '2':
-            await replace_I_in_verified()
-        elif response == '3':
-            await add_missing_FA_indicator_to_verified()
-        elif response == '4':
-            print('Getting users in voice channels\n')
-
-            voice_channels = dict()
-            for channel in GUILD.voice_channels:
-                voice_channels[channel.name] = channel.members
-            for channel, members in voice_channels.items():
-                if not members:
-                    continue
-                print(f'{channel}')
-                print(f'\t{', '.join([member.display_name for member in members])}')
-            print('\nFinished getting users in voice channels')
+            await add_verified_users_to_db()
 
         else:
             print('Invalid choice. Please try again.')
         print()
 
-async def add_missing_FA_indicator_to_verified() -> None:
-    """Searches for verified users who have the verified role but no FA indicator in their nickname and adds it.
-    The FA indicator is " | FA".
-    """
-    print('Adding " | FA" to verified users who have verified role but no FA indicator in their nickname')
-    # get all verified users
-    verified_users: List[Member] = await get_all_verified_users()
-    # filter out nicknames that already have | [ANYTHING] at the end
-    verified_users = [user for user in verified_users if not re.search(r'\| .+$', user.display_name)]
-    ignore_list = ['Alfa League', 'zyxi ( ALT )']
-    for user in verified_users:
-        try:
-            if user.display_name in ignore_list:
-                continue
-            new_display_name: str = user.display_name + ' | FA'
-            print(f'Changing {user.display_name} to {new_display_name}')
-            await user.edit(nick=new_display_name)
-        except Exception as e:
-            print(f'Error changing {user.display_name}: {e}')
-    print('Finished adding " | FA" to verified users.')
+async def add_verified_users_to_db() -> None:
+    '''Add users with the Verified role to the Players table.'''
+    global GUILD
+    if not GUILD:
+        raise ValueError('Guild not set.')
+    # Get a new DB session
+    db = get_db_session()
 
-async def replace_I_in_verified() -> None:
-    """Searches for verified users who have the verified role and replaces ' I ' with ' | ' in their nickname."""
-    print('Cleaning up verified usernames. Changing " I " to " | "')
-    # get all verified users
-    verified_users: List[Member] = await get_all_verified_users()
+    try:
+        # Get all verified users
+        verified_users = await get_all_verified_users()
 
-    for user in verified_users:
-        # check if the user's display name contains ' I '
-        if ' I ' in user.display_name:
-            # replace ' I ' with ' | '
-            new_display_name: str = user.display_name.replace(' I ', ' | ')
-            print(f'Changing {user.nick} to {new_display_name}')
-            await user.edit(nick=new_display_name)
-    print('Finished cleaning up verified usernames.')
+        for user in verified_users:
+            player = player_dao.get_player(db, user.id)
+            if not player:
+                new_player = Player(id=user.id, display_name=user.display_name)
+                player_dao.create_player(db, new_player)
+    except SQLAlchemyError as e:
+        print(f'Error: an error occurred while adding verified users to the Players table: {e}')
+    finally:
+        db.close()
 
 async def get_all_unverified_users() -> List[Member]:
     '''Returns a list of GUILD users that have not been verified.'''
     global GUILD
+    if not GUILD:
+        raise ValueError('Guild not set.')
     unverified_users: List[Member] = []
     async for member in GUILD.fetch_members():
         if not any(role.name == 'Verified' for role in member.roles) and not member.bot:
@@ -104,7 +80,8 @@ async def get_all_unverified_users() -> List[Member]:
 async def get_all_verified_users() -> List[Member]:
     '''Returns a list of all users that have been verified.'''
     global GUILD
-
+    if not GUILD:
+        raise ValueError('Guild not set.')
     verified_users: List[Member] = []
     async for member in GUILD.fetch_members():
         if any(role.name == 'Verified' for role in member.roles) and not member.bot:
@@ -148,11 +125,13 @@ async def get_unverified_rank_check_usage(messages: List[Message], unverified_us
 async def find_unverified_users_with_rank_check() -> None:
     unverified_users: List[Member] = await get_all_unverified_users()
     global GUILD
+    if not GUILD:
+        raise ValueError('Guild not set.')
+
     print('Scanning the ✅rankcheck✅ channel for /rank commands by unverified users')
-    channel: TextChannel = utils.get(GUILD.text_channels, name='✅rankcheck✅')
+    channel: Optional[TextChannel] = utils.get(GUILD.text_channels, name='✅rankcheck✅')
     if not channel:
-        print('Channel ✅rankcheck✅ not found.')
-        return
+        raise ValueError('Channel ✅rankcheck✅ not found.')
     messages: List[Message] = await get_channel_message_history(channel)
     print(f'Found {len(messages)} messages in the ✅rankcheck✅ channel.')
     unverified_rank_check: List[Message] = await get_unverified_rank_check_usage(messages, unverified_users)
